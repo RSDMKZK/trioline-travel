@@ -1,5 +1,5 @@
 {
-  "name": "archer-aviation",
+  "name": "trioline-travels",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,6 +9,7 @@
     "build": "node -e \"console.log('Build ready')\""
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "gsap": "^3.15.0"
   }
 }
