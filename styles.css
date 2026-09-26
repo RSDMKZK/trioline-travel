@@ -1363,9 +1363,6 @@ button {
   color: var(--cream);
   font-variant-numeric: tabular-nums;
 }
-  color: var(--muted);
-  margin-bottom: 8px;
-}
 
 .spec-highlight {
   font-family: var(--font-main);

@@ -1,0 +1,6 @@
+reference/
+src/
+.env*
+.git
+.github
+*.log

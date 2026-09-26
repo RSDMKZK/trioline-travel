@@ -12,6 +12,16 @@ const HOST = '0.0.0.0';
 // Serve static assets from root
 app.use(express.static(__dirname));
 
+// Health endpoint matching Vercel Serverless Function
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'operational',
+    service: 'TRIOLINE TRAVELS Global Operations & Flight Concierge',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
+});
+
 // Single-page fallback
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
