@@ -437,6 +437,106 @@
     }
   }
 
+  // --------------------------------------------------------------------------
+  // Experience Metrics Entrance Animations (GSAP ScrollTrigger)
+  // --------------------------------------------------------------------------
+  function initExperienceMetricsGSAP() {
+    const metricsGrid = document.querySelector('.metrics-grid');
+    const metricCards = document.querySelectorAll('.metric-card');
+    if (!metricsGrid || !metricCards.length) return;
+
+    if (!hasGSAP || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      metricCards.forEach(card => {
+        card.style.opacity = '1';
+        card.style.transform = 'none';
+      });
+      return;
+    }
+
+    // Editorial column reveal
+    const expLeft = document.querySelector('.experience-grid .editorial-col-left');
+    const expRight = document.querySelector('.experience-grid .editorial-col-right');
+    if (expLeft && expRight) {
+      gsap.fromTo(
+        [expLeft, expRight],
+        { opacity: 0, y: 35 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.9,
+          stagger: 0.15,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: '.experience-grid',
+            start: 'top 85%',
+            once: true
+          }
+        }
+      );
+    }
+
+    // Metric Cards entrance + odometer counter reveal
+    gsap.fromTo(
+      metricCards,
+      { opacity: 0, y: 48, scale: 0.94 },
+      {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        duration: 1.05,
+        stagger: 0.14,
+        ease: 'power3.out',
+        scrollTrigger: {
+          trigger: metricsGrid,
+          start: 'top 84%',
+          once: true,
+          onEnter: () => {
+            // Trigger glint sweep
+            metricCards.forEach((card, idx) => {
+              setTimeout(() => card.classList.add('glint'), idx * 160);
+            });
+
+            // Animate numeric counters
+            metricCards.forEach(card => {
+              const valEl = card.querySelector('.metric-val');
+              if (!valEl) return;
+              const target = parseFloat(valEl.dataset.target);
+              if (isNaN(target)) return;
+              const prefix = valEl.dataset.prefix || '';
+              const suffix = valEl.dataset.suffix || '';
+              const isComma = valEl.dataset.format === 'comma';
+
+              const counterObj = { val: 0 };
+              gsap.to(counterObj, {
+                val: target,
+                duration: 1.8,
+                ease: 'power2.out',
+                onUpdate: () => {
+                  const current = Math.round(counterObj.val);
+                  let formatted = current.toString();
+                  if (isComma) {
+                    formatted = current.toLocaleString('en-US');
+                  } else if (prefix && current < 10) {
+                    formatted = prefix + current;
+                  }
+                  if (suffix === 'NM') {
+                    valEl.innerHTML = `${formatted}<span class="metric-unit">NM</span>`;
+                  } else if (suffix === 'FT') {
+                    valEl.innerHTML = `${formatted}<span class="metric-unit">FT</span>`;
+                  } else if (suffix === '/7') {
+                    valEl.innerHTML = `${formatted}<span class="metric-unit">/7</span>`;
+                  } else {
+                    valEl.textContent = formatted;
+                  }
+                }
+              });
+            });
+          }
+        }
+      }
+    );
+  }
+
   // Header scroll detection
   window.addEventListener('scroll', () => {
     if (header) {
@@ -449,10 +549,14 @@
     document.addEventListener('DOMContentLoaded', () => {
       initHeroFlightGSAP();
       initAircraftJourneyGSAP();
+      initExperienceMetricsGSAP();
+      initGlobalReachMap();
     });
   } else {
     initHeroFlightGSAP();
     initAircraftJourneyGSAP();
+    initExperienceMetricsGSAP();
+    initGlobalReachMap();
   }
 
   // Re-calculate responsive values on window resize
@@ -532,41 +636,329 @@
   });
 
   // --------------------------------------------------------------------------
-  // 5. Global Reach Interactive Route Matrix
+  // 5. Global Reach Interactive Route Matrix & SVG Map Controller
   // --------------------------------------------------------------------------
-  const hubBtns = document.querySelectorAll('.hub-btn');
-  const targetCityEl = document.querySelector('.target-city');
-  const targetCodeEl = document.querySelector('.target-code');
-  const trajTimeEl = document.querySelector('.traj-time');
-  const trajDistEl = document.querySelector('.traj-dist');
-  const targetCoordsEl = document.querySelector('.target-coords');
+  function initGlobalReachMap() {
+    const hubBtns = document.querySelectorAll('.hub-btn');
+    const targetCityEl = document.querySelector('.target-city');
+    const targetCodeEl = document.querySelector('.target-code');
+    const trajTimeEl = document.querySelector('.traj-time');
+    const trajDistEl = document.querySelector('.traj-dist');
+    const targetCoordsEl = document.querySelector('.target-coords');
+    
+    const activePathEl = document.getElementById('active-corridor-path');
+    const activeGlowEl = document.getElementById('active-corridor-glow');
+    const planeMarkerEl = document.getElementById('map-aircraft-marker');
+    const activeCalloutEl = document.getElementById('map-active-callout');
+    const replayBtn = document.getElementById('map-replay-flight');
+    const tooltipEl = document.getElementById('map-hub-tooltip');
+    const mapContainer = document.getElementById('global-reach-map-container');
+    const hubMarkers = document.querySelectorAll('.map-hub-marker');
+    const inactiveArcs = document.querySelectorAll('.map-corridor-arc');
 
-  hubBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      hubBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+    // Hubs database with great-circle trajectories and coordinates
+    const hubDatabase = {
+      london: {
+        name: 'London',
+        code: 'EGGW / FAB',
+        country: 'GB',
+        dist: '2,750 NM',
+        time: '06h 10m',
+        lat: '51° 52′ N',
+        lon: '00° 22′ W',
+        arc: 'M509.2,238.9L505.1,165.7L499.1,93.5',
+        x: 499.1,
+        y: 93.5
+      },
+      paris: {
+        name: 'Paris',
+        code: 'LFPB / LBG',
+        country: 'FR',
+        dist: '2,560 NM',
+        time: '05h 45m',
+        lat: '48° 58′ N',
+        lon: '02° 26′ E',
+        arc: 'M509.2,238.9L507.9,170.8L506,102.6',
+        x: 506.0,
+        y: 102.6
+      },
+      geneva: {
+        name: 'Geneva',
+        code: 'LSGG / GVA',
+        country: 'CH',
+        dist: '2,620 NM',
+        time: '05h 55m',
+        lat: '46° 14′ N',
+        lon: '06° 06′ E',
+        arc: 'M509.2,238.9L512.6,175.1L515.2,111.1',
+        x: 515.2,
+        y: 111.1
+      },
+      nice: {
+        name: 'Nice / Monaco',
+        code: 'LFMN / NCE',
+        country: 'FR',
+        dist: '2,480 NM',
+        time: '05h 30m',
+        lat: '43° 39′ N',
+        lon: '07° 12′ E',
+        arc: 'M509.2,238.9L514.2,179.2L518.2,119.3',
+        x: 518.2,
+        y: 119.3
+      },
+      dubai: {
+        name: 'Dubai',
+        code: 'OMDW / DWC',
+        country: 'AE',
+        dist: '3,210 NM',
+        time: '07h 05m',
+        lat: '24° 53′ N',
+        lon: '55° 10′ E',
+        arc: 'M509.2,238.9L545.9,222.1L581.4,206.8L615.6,192.7L648.8,179.8',
+        x: 648.8,
+        y: 179.8
+      },
+      newyork: {
+        name: 'New York',
+        code: 'KTEB / TEB',
+        country: 'US',
+        dist: '4,580 NM',
+        time: '09h 50m',
+        lat: '40° 51′ N',
+        lon: '74° 03′ W',
+        arc: 'M509.2,238.9L467.6,200.2L445.6,182.2L422.2,165.8L397.3,151.5L370.5,140.1L341.7,132.2L310.9,128.3',
+        x: 310.9,
+        y: 128.3
+      },
+      losangeles: {
+        name: 'Los Angeles',
+        code: 'KVNY / VNY',
+        country: 'US',
+        dist: '6,620 NM',
+        time: '13h 40m',
+        lat: '34° 12′ N',
+        lon: '118° 29′ W',
+        arc: 'M509.2,238.9L459.7,192.8L433.8,172.9L406.8,155.6L378.8,141.2L349.5,129.8L319.1,121.7L287.6,117.2L255.4,116.5L222.8,120.0L189.3,149.7',
+        x: 189.3,
+        y: 149.7
+      },
+      tokyo: {
+        name: 'Tokyo',
+        code: 'RJTT / HND',
+        country: 'JP',
+        dist: '7,100 NM',
+        time: '14h 20m',
+        lat: '35° 33′ N',
+        lon: '139° 46′ E',
+        arc: 'M509.2,238.9L537.5,202.5L568.0,168.1L584.6,152.1L602.6,137.6L622.2,124.8L643.9,114.3L667.7,106.7L693.9,102.3L721.9,101.5L751.2,104.3L780.8,110.5L810.0,119.7L838.1,131.5L864.7,145.3',
+        x: 864.7,
+        y: 145.3
+      },
+      johannesburg: {
+        name: 'Johannesburg',
+        code: 'FALA / HLA',
+        country: 'ZA',
+        dist: '2,440 NM',
+        time: '05h 25m',
+        lat: '25° 56′ S',
+        lon: '27° 55′ E',
+        arc: 'M509.2,238.9L542.4,291.5L575.1,343.6',
+        x: 575.1,
+        y: 343.6
+      },
+      singapore: {
+        name: 'Singapore',
+        code: 'WSSL / XSP',
+        country: 'SG',
+        dist: '6,050 NM',
+        time: '12h 15m',
+        lat: '01° 25′ N',
+        lon: '103° 52′ E',
+        arc: 'M509.2,238.9L557.0,237.4L604.8,237.7L652.4,239.9L699.6,243.8L745.3,249.0L788.5,255.4',
+        x: 788.5,
+        y: 255.4
+      }
+    };
 
-      const city = btn.dataset.city;
-      const code = btn.dataset.code;
-      const dist = btn.dataset.dist;
-      const time = btn.dataset.time;
-      const lat = btn.dataset.lat;
-      const lon = btn.dataset.lon;
+    let activeHubKey = 'london';
+    let flightTween = null;
 
-      if (targetCityEl) targetCityEl.innerHTML = `${city.toUpperCase()} <sup>${btn.querySelector('sup')?.textContent || ''}</sup>`;
-      if (targetCodeEl) targetCodeEl.textContent = code;
-      if (trajTimeEl) trajTimeEl.textContent = `${time} NON-STOP`;
-      if (trajDistEl) trajDistEl.textContent = dist;
-      if (targetCoordsEl) targetCoordsEl.textContent = `${lat}  ${lon}`;
+    function animateAircraftAlongCorridor() {
+      if (!activePathEl || !planeMarkerEl) return;
+      if (flightTween) flightTween.kill();
 
-      // Update inquiry destination field
+      const pathLength = activePathEl.getTotalLength();
+      if (!pathLength) return;
+
+      const flightProgress = { p: 0 };
+
+      if (!hasGSAP || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        // Place aircraft at destination point
+        const endPt = activePathEl.getPointAtLength(pathLength);
+        planeMarkerEl.setAttribute('transform', `translate(${endPt.x}, ${endPt.y})`);
+        return;
+      }
+
+      // Initial placement at departure point
+      const startPt = activePathEl.getPointAtLength(0);
+      planeMarkerEl.setAttribute('transform', `translate(${startPt.x}, ${startPt.y})`);
+
+      flightTween = gsap.to(flightProgress, {
+        p: 1,
+        duration: 2.4,
+        ease: 'power1.inOut',
+        onUpdate: () => {
+          const distance = flightProgress.p * pathLength;
+          const pt = activePathEl.getPointAtLength(distance);
+          const nextDist = Math.min(pathLength, distance + 2);
+          const nextPt = activePathEl.getPointAtLength(nextDist);
+          const angle = Math.atan2(nextPt.y - pt.y, nextPt.x - pt.x) * (180 / Math.PI) + 90;
+          planeMarkerEl.setAttribute('transform', `translate(${pt.x.toFixed(1)}, ${pt.y.toFixed(1)}) rotate(${angle.toFixed(1)})`);
+        }
+      });
+    }
+
+    function selectHub(hubKey, shouldAnimate = true) {
+      const hub = hubDatabase[hubKey];
+      if (!hub) return;
+      activeHubKey = hubKey;
+
+      // 1. Update Hub Buttons
+      hubBtns.forEach(b => {
+        const isMatch = b.dataset.hub === hubKey || b.dataset.city?.toLowerCase() === hub.name.toLowerCase();
+        b.classList.toggle('active', isMatch);
+      });
+
+      // 2. Update Map Markers
+      hubMarkers.forEach(m => {
+        m.classList.toggle('active', m.dataset.hub === hubKey);
+      });
+
+      // 3. Update Active Great Circle Corridor Arc
+      if (activePathEl && activeGlowEl && hub.arc) {
+        activePathEl.setAttribute('d', hub.arc);
+        activeGlowEl.setAttribute('d', hub.arc);
+
+        if (hasGSAP && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          gsap.fromTo(
+            activeGlowEl,
+            { opacity: 0.1 },
+            { opacity: 0.55, duration: 0.45, yoyo: true, repeat: 1, ease: 'power2.out' }
+          );
+        }
+      }
+
+      // 4. Update HUD Header Callout
+      if (activeCalloutEl) {
+        const destCode = hub.code.split('/')[0].trim();
+        activeCalloutEl.textContent = `LOS ➔ ${destCode} (${hub.name.toUpperCase()})`;
+      }
+
+      // 5. Update Corridor Details Card
+      if (targetCityEl) targetCityEl.innerHTML = `${hub.name.toUpperCase()} <sup>${hub.country}</sup>`;
+      if (targetCodeEl) targetCodeEl.textContent = hub.code;
+      if (trajTimeEl) trajTimeEl.textContent = `${hub.time} NON-STOP`;
+      if (trajDistEl) trajDistEl.textContent = hub.dist;
+      if (targetCoordsEl) targetCoordsEl.textContent = `${hub.lat}  ${hub.lon}`;
+
+      // 6. Synchronize with Flight Booking Suite
       const destInput = document.getElementById('trip-destination');
       if (destInput) {
-        destInput.value = `${city} (${code.split('/')[0].trim()})`;
-        calculateFlightEstimates();
+        destInput.value = `${hub.name} (${hub.code.split('/')[0].trim()})`;
+        if (typeof calculateFlightEstimates === 'function') {
+          calculateFlightEstimates();
+        }
       }
+
+      // 7. Animate aircraft along Great Circle track
+      if (shouldAnimate) {
+        animateAircraftAlongCorridor();
+      }
+    }
+
+    // Hub button clicks
+    hubBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.hub || btn.dataset.city?.toLowerCase().replace(/[^a-z]/g, '');
+        selectHub(key, true);
+      });
     });
-  });
+
+    // Map marker clicks and hover tooltips
+    hubMarkers.forEach(marker => {
+      const key = marker.dataset.hub;
+      const hub = hubDatabase[key];
+
+      marker.addEventListener('click', () => {
+        selectHub(key, true);
+      });
+
+      marker.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectHub(key, true);
+        }
+      });
+
+      marker.addEventListener('pointerenter', () => {
+        if (!tooltipEl || !mapContainer || !hub) return;
+        const ttCity = document.getElementById('tooltip-city');
+        const ttCode = document.getElementById('tooltip-code');
+        const ttDist = document.getElementById('tooltip-dist');
+        const ttTime = document.getElementById('tooltip-time');
+
+        if (ttCity) ttCity.textContent = hub.name.toUpperCase();
+        if (ttCode) ttCode.textContent = hub.code;
+        if (ttDist) ttDist.textContent = hub.dist;
+        if (ttTime) ttTime.textContent = `${hub.time} NON-STOP`;
+
+        // Position tooltip relative to container
+        const rect = mapContainer.getBoundingClientRect();
+        const scaleX = rect.width / 1000;
+        const scaleY = rect.height / 520;
+        const pixelX = hub.x * scaleX;
+        const pixelY = hub.y * scaleY;
+
+        tooltipEl.style.left = `${pixelX}px`;
+        tooltipEl.style.top = `${pixelY}px`;
+        tooltipEl.classList.add('visible');
+        tooltipEl.setAttribute('aria-hidden', 'false');
+      });
+
+      marker.addEventListener('pointerleave', () => {
+        if (tooltipEl) {
+          tooltipEl.classList.remove('visible');
+          tooltipEl.setAttribute('aria-hidden', 'true');
+        }
+      });
+    });
+
+    // Inactive arc click to activate
+    inactiveArcs.forEach(arc => {
+      arc.addEventListener('click', () => {
+        const key = arc.dataset.hub;
+        if (key) selectHub(key, true);
+      });
+    });
+
+    // Replay flight animation button
+    if (replayBtn) {
+      replayBtn.addEventListener('click', () => {
+        animateAircraftAlongCorridor();
+      });
+    }
+
+    // Map container mouseleave hides tooltip
+    if (mapContainer && tooltipEl) {
+      mapContainer.addEventListener('mouseleave', () => {
+        tooltipEl.classList.remove('visible');
+        tooltipEl.setAttribute('aria-hidden', 'true');
+      });
+    }
+
+    // Initialize with default hub (London)
+    selectHub('london', false);
+  }
 
   // --------------------------------------------------------------------------
   // 6. Comprehensive Flight Booking Suite & Live Estimator
@@ -1179,7 +1571,7 @@
     requestAnimationFrame(renderOrb);
 
     // Contextual Hover States
-    document.querySelectorAll('a, button, .accordion-card, .metric-card, .spec-cell, .journey-spec-item, .interior-link, .empty-leg-card').forEach(el => {
+    document.querySelectorAll('a, button, .accordion-card, .metric-card, .spec-cell, .journey-spec-item, .interior-link, .empty-leg-card, .map-hub-marker, .map-action-btn').forEach(el => {
       el.addEventListener('pointerenter', () => {
         orb.classList.add('hovering');
         if (orbLabel) {
@@ -1193,6 +1585,8 @@
             orbLabel.textContent = 'CLAIM';
           } else if (el.classList.contains('hub-btn')) {
             orbLabel.textContent = 'CORRIDOR';
+          } else if (el.classList.contains('map-hub-marker')) {
+            orbLabel.textContent = 'RADAR';
           } else if (el.tagName === 'A' || el.tagName === 'BUTTON') {
             orbLabel.textContent = 'DISCOVER';
           }

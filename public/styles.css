@@ -790,12 +790,31 @@ button {
   background: rgba(255, 255, 255, 0.015);
   border: 1px solid var(--surface-border);
   border-radius: 4px;
-  transition: transform 0.3s ease, border-color 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  transition: left 0.8s ease;
+}
+
+.metric-card:hover::before,
+.metric-card.glint::before {
+  left: 100%;
 }
 
 .metric-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(197, 160, 89, 0.3);
+  border-color: rgba(197, 160, 89, 0.4);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
 }
 
 .metric-val {
@@ -1600,6 +1619,423 @@ button {
 
 .hub-btn.active sup {
   color: var(--black);
+}
+
+/* ==========================================================================
+   Interactive Global Flight Corridors Vector Map
+   ========================================================================== */
+.global-map-wrapper {
+  background: var(--charcoal);
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  margin-bottom: 20px;
+}
+
+.map-hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 24px;
+  background: rgba(14, 15, 17, 0.95);
+  border-bottom: 1px solid var(--surface-border);
+  font-family: var(--font-tech);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.hud-stat-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-radar-beacon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+  animation: radarBlink 1.5s ease-in-out infinite;
+}
+
+@keyframes radarBlink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.hud-label {
+  color: var(--muted);
+}
+
+.hud-val {
+  color: var(--cream);
+  font-weight: 500;
+}
+
+.active-corridor-callout {
+  color: var(--gold) !important;
+  font-weight: 600 !important;
+}
+
+.map-svg-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1000 / 520;
+  background: #08090c;
+  overflow: hidden;
+  user-select: none;
+}
+
+#global-reach-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Vector Map Elements */
+.map-ocean-bg {
+  pointer-events: none;
+}
+
+.map-graticule {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.04);
+  stroke-width: 0.75px;
+  stroke-dasharray: 2 4;
+}
+
+.map-sphere-outline {
+  fill: none;
+  stroke: rgba(197, 160, 89, 0.14);
+  stroke-width: 1px;
+}
+
+.map-landmass {
+  fill: #131519;
+  stroke: rgba(197, 160, 89, 0.16);
+  stroke-width: 0.8px;
+  transition: fill 0.3s ease;
+}
+
+/* Corridors */
+.map-corridor-arc {
+  fill: none;
+  stroke-linecap: round;
+  cursor: pointer;
+  transition: stroke 0.3s ease, stroke-width 0.3s ease;
+}
+
+.map-corridor-arc.inactive-arc {
+  stroke: rgba(197, 160, 89, 0.2);
+  stroke-width: 1.2px;
+  stroke-dasharray: 3 5;
+}
+
+.map-corridor-arc.inactive-arc:hover {
+  stroke: rgba(197, 160, 89, 0.7);
+  stroke-width: 2px;
+}
+
+.map-active-corridor-glow {
+  fill: none;
+  stroke: rgba(197, 160, 89, 0.4);
+  stroke-width: 5px;
+  stroke-linecap: round;
+  pointer-events: none;
+  transition: d 0.4s ease;
+}
+
+.map-active-corridor {
+  fill: none;
+  stroke: url(#gold-corridor-grad);
+  stroke-width: 2.2px;
+  stroke-linecap: round;
+  stroke-dasharray: 6 3;
+  animation: dashStream 35s linear infinite;
+  pointer-events: none;
+  transition: d 0.4s ease;
+}
+
+@keyframes dashStream {
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+
+/* Aircraft Sprite Marker */
+.map-aircraft-marker {
+  pointer-events: none;
+  will-change: transform;
+}
+
+.aircraft-beacon-aura {
+  fill: rgba(197, 160, 89, 0.25);
+  animation: beaconPulse 1.8s ease-in-out infinite;
+}
+
+.aircraft-beacon-core {
+  fill: #f4efe6;
+  filter: drop-shadow(0 0 4px #c5a059);
+}
+
+.aircraft-silhouette {
+  fill: var(--gold);
+  stroke: #080808;
+  stroke-width: 0.5px;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.9));
+}
+
+@keyframes beaconPulse {
+  0%, 100% { r: 12; opacity: 0.55; }
+  50% { r: 18; opacity: 0.15; }
+}
+
+/* Hub Markers */
+.map-hub-node.base-hub {
+  pointer-events: none;
+}
+
+.radar-pulse-ring {
+  fill: none;
+  stroke: rgba(197, 160, 89, 0.6);
+  stroke-width: 1px;
+  animation: radarPing 3.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  transform-origin: center;
+}
+
+.radar-pulse-ring.delay {
+  animation-delay: 1.6s;
+}
+
+@keyframes radarPing {
+  0% {
+    r: 4;
+    opacity: 0.95;
+    stroke-width: 1.5px;
+  }
+  100% {
+    r: 26;
+    opacity: 0;
+    stroke-width: 0.5px;
+  }
+}
+
+.hub-center-dot.base {
+  fill: #fff;
+  stroke: var(--gold);
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 6px rgba(197, 160, 89, 0.8));
+}
+
+.map-hub-marker {
+  cursor: pointer;
+  outline: none;
+}
+
+.hub-hit-area {
+  fill: transparent;
+}
+
+.hub-radar-ring {
+  fill: none;
+  stroke: rgba(197, 160, 89, 0.35);
+  stroke-width: 1px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.map-hub-marker:hover .hub-radar-ring,
+.map-hub-marker.active .hub-radar-ring {
+  opacity: 1;
+  animation: radarPing 2.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.hub-dot {
+  fill: var(--gold);
+  stroke: #080808;
+  stroke-width: 1.5px;
+  transition: all 0.25s ease;
+}
+
+.map-hub-marker:hover .hub-dot {
+  fill: #fff;
+  r: 4.5;
+  filter: drop-shadow(0 0 6px rgba(197, 160, 89, 0.9));
+}
+
+.map-hub-marker.active .hub-dot {
+  fill: #fff;
+  r: 4.5;
+  stroke: var(--gold);
+  filter: drop-shadow(0 0 8px rgba(197, 160, 89, 1));
+}
+
+.hub-svg-label {
+  font-family: var(--font-tech);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  fill: rgba(244, 239, 230, 0.8);
+  pointer-events: none;
+  transition: fill 0.2s ease, font-weight 0.2s ease;
+}
+
+.hub-country {
+  fill: var(--gold);
+  font-size: 6.5px;
+}
+
+.map-hub-marker:hover .hub-svg-label,
+.map-hub-marker.active .hub-svg-label {
+  fill: var(--cream);
+  font-weight: 700;
+}
+
+.base-label {
+  fill: var(--gold) !important;
+  font-weight: 700 !important;
+}
+
+.map-hub-marker:focus-visible .hub-dot {
+  stroke: #fff;
+  stroke-width: 2.5px;
+}
+
+/* Floating Glassmorphism Tooltip */
+.map-hub-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(14, 15, 17, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(197, 160, 89, 0.35);
+  border-radius: 4px;
+  padding: 14px 18px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  z-index: 20;
+  min-width: 220px;
+  opacity: 0;
+  transform: translate(-50%, -115%) scale(0.96);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.map-hub-tooltip.visible {
+  opacity: 1;
+  transform: translate(-50%, -125%) scale(1);
+}
+
+.tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 10px;
+}
+
+.tooltip-city {
+  font-family: var(--font-main);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cream);
+  letter-spacing: -0.01em;
+}
+
+.tooltip-code {
+  font-family: var(--font-tech);
+  font-size: 9px;
+  color: var(--gold);
+  letter-spacing: 0.12em;
+}
+
+.tooltip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-tech);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.tooltip-row strong {
+  color: var(--cream);
+  font-weight: 500;
+}
+
+.tooltip-footer {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: var(--font-tech);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+
+/* Map HUD Footer */
+.map-hud-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 24px;
+  background: rgba(14, 15, 17, 0.95);
+  border-top: 1px solid var(--surface-border);
+  font-family: var(--font-tech);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.map-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(197, 160, 89, 0.08);
+  border: 1px solid rgba(197, 160, 89, 0.3);
+  color: var(--cream);
+  font-family: var(--font-tech);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.map-action-btn:hover {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--black);
+}
+
+@media (max-width: 768px) {
+  .map-hud-header, .map-hud-footer {
+    padding: 12px 16px;
+  }
+  .hud-stat-node:nth-child(2) {
+    display: none;
+  }
+  .map-svg-container {
+    aspect-ratio: 1000 / 600;
+  }
 }
 
 .flight-corridor-card {
